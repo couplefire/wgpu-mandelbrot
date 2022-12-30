@@ -13,7 +13,6 @@ use winit::{
 
 use crate::{
     config::*,
-    state::State,
     ui::UI,
     plotter::Plotter,
 };
@@ -32,12 +31,12 @@ fn main() {
 
     let instance = wgpu::Instance::new(wgpu::Backends::all());
     let surface = unsafe { instance.create_surface(&window) };
-    let adaptor = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(&surface),
         force_fallback_adapter: false,
     })).unwrap();
-    let (device, queue) = pollster::block_on(adaptor.request_device(&wgpu::DeviceDescriptor {
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         features: wgpu::Features::empty(),
         limits: wgpu::Limits::default(),
         label: None,
@@ -52,12 +51,16 @@ fn main() {
     };
     surface.configure(&device, &config);
 
-    let state = State::new();
-    let ui = UI::new();
-    let plotter = Plotter::new();
+    let ctx = egui::Context::default();
+
     let mut renderer = egui_wgpu::renderer::Renderer::new(&device, FORMAT, None, 1);
 
-    let mut ctx = egui::Context::default();
+    let mut plotter = Plotter::new(&device, DEFAULT_STATE);
+    let plot_id = renderer.register_native_texture(&device, &plotter.texture_view, wgpu::FilterMode::Linear);
+
+    let mut ui = UI::new(plot_id.clone(), DEFAULT_STATE);
+
+    ui.state.dpi = window.scale_factor() as f32;
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -74,20 +77,31 @@ fn main() {
                         config.height = new_siz.height;
                         surface.configure(&device, &config);
                     },
+                    WindowEvent::ScaleFactorChanged {
+                        scale_factor, 
+                        new_inner_size,
+                    } => {
+                        ui.state.dpi = *scale_factor as f32;
+
+                        config.width = new_inner_size.width;
+                        config.height = new_inner_size.height;
+                        surface.configure(&device, &config);
+                    },
                     _ => {},
                 }
                 winit_state.on_event(&ctx, &event);
             },
             Event::RedrawRequested(window_id) if window_id == window.id() => {
-                let egui_output = ctx.run(winit_state.take_egui_input(&window), |ctx| {
-                    egui::CentralPanel::default().show(&ctx, |ui| {
-                        ui.label("This is a label");
-                        ui.hyperlink("https://github.com/emilk/egui");
-                        if ui.button("Click me").clicked() { }
-                    });
-                });
-
+                ctx.begin_frame(winit_state.take_egui_input(&window));
+                ui.ui(&ctx);
+                let egui_output = ctx.end_frame();
                 winit_state.handle_platform_output(&window, &ctx, egui_output.platform_output);
+
+                plotter.state = ui.state.clone();
+                plotter.update_texture(&surface, &device, &queue);
+
+                renderer.update_egui_texture_from_wgpu_texture(&device, &plotter.texture_view, wgpu::FilterMode::Linear, plot_id);
+
                 let clipped_primitives = ctx.tessellate(egui_output.shapes);
                 let screen_descriptor = ScreenDescriptor {
                     size_in_pixels: [config.width, config.height],
@@ -97,7 +111,7 @@ fn main() {
                 let output_frame = surface.get_current_texture().unwrap();
                 let output_view = output_frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
                 let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Main Encoder"),
+                    label: Some("Egui Encoder"),
                 });
 
                 for idx in 0..egui_output.textures_delta.set.len() {
@@ -110,7 +124,7 @@ fn main() {
                 
                 {
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("Render Pass"),
+                        label: Some("Egui Render Pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &output_view,
                             resolve_target: None,
