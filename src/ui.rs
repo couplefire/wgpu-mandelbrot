@@ -98,11 +98,11 @@ impl UI {
             .frame(frame_style)
             .show(&ctx, |ui| {
                 ui.label("Hue Period:");
-                ui.add(egui::Slider::new(&mut self.state.hue_prd, 100.0..=10000.0).logarithmic(true));
+                ui.add(egui::Slider::new(&mut self.state.hue_prd, 10.0..=10000.0).logarithmic(true));
                 ui.label("Saturation Period:");
-                ui.add(egui::Slider::new(&mut self.state.sat_prd, 100.0..=10000.0).logarithmic(true));
+                ui.add(egui::Slider::new(&mut self.state.sat_prd, 10.0..=10000.0).logarithmic(true));
                 ui.label("Lightness Period:");
-                ui.add(egui::Slider::new(&mut self.state.lgt_prd, 100.0..=10000.0).logarithmic(true));
+                ui.add(egui::Slider::new(&mut self.state.lgt_prd, 10.0..=10000.0).logarithmic(true));
                 ui.separator();
                 ui.label("Hue Offset:");
                 ui.add(egui::Slider::new(&mut self.state.hue_offset, 0.0..=1.0));

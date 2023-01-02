@@ -1,4 +1,3 @@
-use egui::emath::Numeric;
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -33,7 +32,7 @@ const INDICES: &[u16] = &[
 ];
 
 impl Plotter {
-    pub fn new(device: &wgpu::Device, state: State) -> Self {
+    pub fn new(device: &wgpu::Device, texture_format: wgpu::TextureFormat, state: State) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Mandelbrot Texture"),
             size: wgpu::Extent3d {
@@ -48,8 +47,6 @@ impl Plotter {
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        // println!("{}", std::mem::size_of::<State>().to_string());
 
         let texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Texture Bind Group Layout"),
@@ -156,7 +153,7 @@ impl Plotter {
                 entry_point: "fs_main",
                 targets: &[Some(
                     wgpu::ColorTargetState {
-                        format: FORMAT,
+                        format: texture_format,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent::REPLACE,
                             alpha: wgpu::BlendComponent::REPLACE,
