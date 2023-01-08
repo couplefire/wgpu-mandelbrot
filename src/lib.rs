@@ -8,7 +8,7 @@ use winit::{
     window::{WindowBuilder},
     event::*,
     event_loop::{EventLoopBuilder, ControlFlow}, 
-    dpi::LogicalSize,
+    dpi::{LogicalSize, PhysicalSize},
 };
 
 #[cfg(target_arch="wasm32")]
@@ -25,28 +25,36 @@ pub async fn run() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
+            console_log::init().expect("Couldn't initialize logger");
         } else {
             env_logger::init();
         }
     }
     
     let event_loop = EventLoopBuilder::<winit::event::WindowEvent>::with_user_event().build();
-    let proxy = event_loop.create_proxy();
+    let window_proxy = event_loop.create_proxy();
     let window = WindowBuilder::new()
         .with_title(WINDOW_TITLE)
         .with_inner_size(LogicalSize::new(DEFAULT_WIDTH, DEFAULT_HEIGHT))
         .build(&event_loop)
         .unwrap();
 
-    #[cfg(target_arch = "wasm32")]
-    {
+    #[cfg(target_arch = "wasm32")] {
         use winit::platform::web::WindowExtWebSys;
+        use wasm_bindgen::JsCast;
+
         web_sys::window()
             .and_then(|win| win.document())
             .and_then(|doc| {
-                let dst = doc.get_element_by_id("main-box")?;
-                let canvas = web_sys::Element::from(window.canvas());
+                let dst = doc.query_selector(".app-box").unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
+                window.set_inner_size(LogicalSize::new(dst.client_width(), dst.client_height()));
+                let canvas = web_sys::HtmlCanvasElement::from(window.canvas());
+                canvas.style().remove_property("width").unwrap();
+                canvas.style().remove_property("height").unwrap();
+                canvas.style().set_property("display", "block").unwrap();
+                canvas.style().set_property("position", "absolute").unwrap();
+                canvas.style().set_property("top", "0 px").unwrap();
+                canvas.style().set_property("left", "0 px").unwrap();
                 dst.append_child(&canvas).ok()?;
                 Some(())
             })
@@ -90,11 +98,79 @@ pub async fn run() {
 
     ui.state.dpi = window.scale_factor() as f32;
 
+    #[cfg(target_arch = "wasm32")] {
+        use wasm_bindgen::JsCast;
+
+        let mut is_fullscreen = false;
+
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let dst = doc.query_selector(".app-box").unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
+                let body = doc.body().unwrap();
+                let canvas = doc.query_selector("canvas").unwrap().unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+                let dpi = window.scale_factor() as f32;
+
+                let fullscreen_proxy = event_loop.create_proxy();
+                let fullscreen_handler = Closure::<dyn FnMut()>::new(move || {
+                    log::info!("hi");
+                    is_fullscreen = !is_fullscreen;
+                    if !is_fullscreen {
+                        canvas.set_width(dst.client_width() as u32);
+                        canvas.set_height(dst.client_height() as u32);
+                    } else {
+                        let width = body.client_width();
+                        let height = body.client_height();
+                        canvas.set_width(width as u32);
+                        canvas.set_height(height as u32);
+                    }
+                    let physical_width = ((canvas.width() as f32) * dpi) as u32;
+                    let physical_height = ((canvas.height() as f32) * dpi) as u32;
+                    fullscreen_proxy.send_event(WindowEvent::Resized(PhysicalSize::new(physical_width, physical_height))).unwrap();
+                });
+                doc.set_onfullscreenchange(Some(fullscreen_handler.as_ref().unchecked_ref()));
+                fullscreen_handler.forget();
+
+                Some(())
+            }).expect("Couldn't setup fullscreen event");
+
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let dst = doc.query_selector(".app-box").unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
+                let canvas = doc.query_selector("canvas").unwrap().unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+                let dpi = window.scale_factor() as f32;
+                
+                let resize_proxy = event_loop.create_proxy();
+                let resize_handler = Closure::<dyn FnMut()>::new(move || {
+                    if !is_fullscreen {
+                        canvas.set_width(dst.client_width() as u32);
+                        canvas.set_height(dst.client_height() as u32);
+                    }
+                    let physical_width = ((canvas.width() as f32) * dpi) as u32;
+                    let physical_height = ((canvas.height() as f32) * dpi) as u32;
+                    resize_proxy.send_event(WindowEvent::Resized(PhysicalSize::new(physical_width, physical_height))).unwrap();
+                });
+                web_sys::window().unwrap().set_onresize(Some(resize_handler.as_ref().unchecked_ref()));
+                resize_handler.forget();
+
+                Some(())
+            }).expect("Couldn't setup resize event");
+    }
+
     let mut cur_z_state = ElementState::Released;
 
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::UserEvent(event) => {
+                match event {
+                    WindowEvent::Resized(new_siz) => {
+                        config.width = new_siz.width;
+                        config.height = new_siz.height;
+                        surface.configure(&device, &config);
+                    },
+                    _ => {}
+                }
                 if winit_state.on_event(&ctx, &event).repaint {
                     window.request_redraw();
                 }
@@ -112,26 +188,16 @@ pub async fn run() {
                         config.height = new_siz.height;
                         surface.configure(&device, &config);
                     },
-                    WindowEvent::ScaleFactorChanged {
-                        scale_factor, 
-                        new_inner_size,
-                    } => {
-                        ui.state.dpi = *scale_factor as f32;
-
-                        config.width = new_inner_size.width;
-                        config.height = new_inner_size.height;
-                        surface.configure(&device, &config);
-                    },
-                    WindowEvent::KeyboardInput { device_id, input, is_synthetic } => {
+                    WindowEvent::KeyboardInput { device_id: _, input, is_synthetic: _ } => {
                         match input.virtual_keycode.unwrap() {
                             VirtualKeyCode::Z => {
                                 if input.state != cur_z_state {
                                     match input.state {
                                         ElementState::Pressed => {
-                                            proxy.send_event(WindowEvent::ModifiersChanged(ModifiersState::CTRL)).unwrap();
+                                            window_proxy.send_event(WindowEvent::ModifiersChanged(ModifiersState::CTRL)).unwrap();
                                         },
                                         ElementState::Released => {
-                                            proxy.send_event(WindowEvent::ModifiersChanged(ModifiersState::empty())).unwrap();
+                                            window_proxy.send_event(WindowEvent::ModifiersChanged(ModifiersState::empty())).unwrap();
                                         }
                                     }
                                     cur_z_state = input.state;
