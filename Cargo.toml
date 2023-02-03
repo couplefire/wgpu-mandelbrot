@@ -1,6 +1,6 @@
 [package]
-name = "mandelbrot"
-version = "0.1.0"
+name = "wgpu-mandelbrot"
+version = "1.0.0"
 edition = "2021"
 
 [lib]
@@ -21,6 +21,7 @@ egui-wgpu = { version = "0.20.0", features = [ "winit" ] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3.60", features = [
     "Document",
+    "DomTokenList",
     "Navigator",
     "Node",
     "NodeList",

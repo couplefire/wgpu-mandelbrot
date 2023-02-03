@@ -2,6 +2,8 @@ use crate::{
     state::State,
 };
 
+pub const NAME: &str = "wgpu-mandelbrot";
+
 pub const WINDOW_TITLE: &str = "Mandelbrot Set";
 
 pub const DEFAULT_WIDTH: u32 = 1200;

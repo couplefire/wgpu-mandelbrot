@@ -922,27 +922,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mandelbrot"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "cfg-if",
- "console_error_panic_hook",
- "console_log",
- "egui",
- "egui-wgpu",
- "egui-winit",
- "env_logger",
- "log",
- "pollster",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "winit",
-]
-
-[[package]]
 name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1941,6 +1920,27 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winapi",
+]
+
+[[package]]
+name = "wgpu-mandelbrot"
+version = "1.0.0"
+dependencies = [
+ "bytemuck",
+ "cfg-if",
+ "console_error_panic_hook",
+ "console_log",
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
+ "env_logger",
+ "log",
+ "pollster",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]

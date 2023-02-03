@@ -1,3 +1,3 @@
 fn main() {
-    pollster::block_on(mandelbrot::run());
+    pollster::block_on(wgpu_mandelbrot::run());
 }

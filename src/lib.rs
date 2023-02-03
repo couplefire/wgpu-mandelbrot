@@ -42,13 +42,14 @@ pub async fn run() {
     #[cfg(target_arch = "wasm32")] {
         use winit::platform::web::WindowExtWebSys;
         use wasm_bindgen::JsCast;
-
         web_sys::window()
             .and_then(|win| win.document())
             .and_then(|doc| {
-                let dst = doc.query_selector(".app-box").unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
-                window.set_inner_size(LogicalSize::new(dst.client_width(), dst.client_height()));
+                let dst = doc.query_selector(format!(".{}-box", NAME).as_str()).unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
+                window.set_inner_size(PhysicalSize::new(dst.client_width(), dst.client_height()));
+
                 let canvas = web_sys::HtmlCanvasElement::from(window.canvas());
+                canvas.set_class_name(NAME);
                 canvas.style().remove_property("width").unwrap();
                 canvas.style().remove_property("height").unwrap();
                 canvas.style().set_property("display", "block").unwrap();
@@ -56,9 +57,9 @@ pub async fn run() {
                 canvas.style().set_property("top", "0 px").unwrap();
                 canvas.style().set_property("left", "0 px").unwrap();
                 dst.append_child(&canvas).ok()?;
+
                 Some(())
-            })
-            .expect("Couldn't append canvas to document body.");
+            }).expect("Couldn't append canvas to document body.");
     }
 
     let mut winit_state = egui_winit::State::new(&event_loop);
@@ -102,18 +103,17 @@ pub async fn run() {
         use wasm_bindgen::JsCast;
 
         let mut is_fullscreen = false;
-
+        
         web_sys::window()
             .and_then(|win| win.document())
             .and_then(|doc| {
-                let dst = doc.query_selector(".app-box").unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
+                let dst = doc.query_selector(format!(".{}-box", NAME).as_str()).unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
                 let body = doc.body().unwrap();
-                let canvas = doc.query_selector("canvas").unwrap().unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+                let canvas = doc.query_selector(format!(".{}", NAME).as_str()).unwrap().unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
                 let dpi = window.scale_factor() as f32;
 
                 let fullscreen_proxy = event_loop.create_proxy();
                 let fullscreen_handler = Closure::<dyn FnMut()>::new(move || {
-                    log::info!("hi");
                     is_fullscreen = !is_fullscreen;
                     if !is_fullscreen {
                         canvas.set_width(dst.client_width() as u32);
@@ -137,8 +137,8 @@ pub async fn run() {
         web_sys::window()
             .and_then(|win| win.document())
             .and_then(|doc| {
-                let dst = doc.query_selector(".app-box").unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
-                let canvas = doc.query_selector("canvas").unwrap().unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+                let dst = doc.query_selector(format!(".{}-box", NAME).as_str()).unwrap().unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
+                let canvas = doc.query_selector(format!(".{}", NAME).as_str()).unwrap().unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
                 let dpi = window.scale_factor() as f32;
                 
                 let resize_proxy = event_loop.create_proxy();
